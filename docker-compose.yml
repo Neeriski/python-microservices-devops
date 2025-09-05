@@ -1,0 +1,54 @@
+services:
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: pass
+      POSTGRES_DB: mydb
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d mydb"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  backend:
+    build: ./backend
+    environment:
+      POSTGRES_HOST: db
+      POSTGRES_DB: mydb
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: pass
+      LOG_PATH: /shared/requests.log
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - shared:/shared
+    ports:
+      - "${BACKEND_PORT:-5000}:5000"
+
+  logger:
+  
+    build: ./logger
+    environment:
+      IN_FILE: /shared/requests.log
+      OUT_FILE: /shared/aggregated.log
+    depends_on:
+      - backend
+    volumes:
+      - shared:/shared
+
+  frontend:
+    build: ./frontend
+    environment:
+      BACKEND_URL: http://backend:5000/api/data
+    depends_on:
+      - backend
+    ports:
+      - "${FRONTEND_PORT:-8080}:80"
+
+volumes:
+  pgdata:
+  shared:
